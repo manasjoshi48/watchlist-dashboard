@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bottleneck Watchlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12151A;
+    --panel:#1A1F27;
+    --panel-border:#2A313C;
+    --text:#E7E4DC;
+    --text-dim:#8B93A1;
+    --copper:#C97C3D;
+    --copper-dim:#8A5A32;
+    --green:#7CA184;
+    --red:#B8564A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    padding:48px 32px 80px;
+    min-height:100vh;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+
+  header{margin-bottom:40px; border-bottom:1px solid var(--panel-border); padding-bottom:28px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    color:var(--copper);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  h1{
+    font-family:'Barlow Condensed', sans-serif;
+    font-weight:700;
+    font-size:56px;
+    line-height:1;
+    letter-spacing:-0.01em;
+    margin-bottom:10px;
+  }
+  .sub{color:var(--text-dim); font-size:15px; max-width:520px; line-height:1.5;}
+
+  .filters{display:flex; gap:8px; margin:28px 0 32px; flex-wrap:wrap;}
+  .chip{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    padding:6px 14px;
+    border:1px solid var(--panel-border);
+    border-radius:2px;
+    color:var(--text-dim);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .chip.active{border-color:var(--copper); color:var(--copper); background:rgba(201,124,61,0.08);}
+  .chip:hover{border-color:var(--text-dim); color:var(--text);}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:20px;}
+
+  .card{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    padding:24px;
+  }
+  .card::before, .card::after,
+  .card .br-tl, .card .br-br{
+    content:'';
+    position:absolute;
+    width:14px; height:14px;
+    border-color:var(--copper-dim);
+  }
+  .card::before{top:-1px; left:-1px; border-top:2px solid var(--copper-dim); border-left:2px solid var(--copper-dim);}
+  .card::after{bottom:-1px; right:-1px; border-bottom:2px solid var(--copper-dim); border-right:2px solid var(--copper-dim);}
+
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;}
+  .ticker{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--copper); letter-spacing:0.05em;}
+  .name{font-family:'Barlow Condensed', sans-serif; font-weight:600; font-size:26px; margin-top:2px;}
+  .sector-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    color:var(--text-dim);
+    border:1px solid var(--panel-border);
+    padding:4px 8px;
+    white-space:nowrap;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+
+  .thesis{font-size:14px; color:var(--text-dim); font-style:italic; line-height:1.5; margin-bottom:20px; padding-left:12px; border-left:2px solid var(--panel-border);}
+
+  .gauge-label{
+    display:flex; justify-content:space-between;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:6px;
+  }
+  .gauge-track{
+    position:relative;
+    height:6px;
+    background:linear-gradient(90deg, #3A4250 0%, var(--copper-dim) 55%, var(--red) 100%);
+    border-radius:2px;
+    margin-bottom:22px;
+  }
+  .gauge-marker{
+    position:absolute; top:-4px;
+    width:2px; height:14px;
+    background:var(--text);
+  }
+  .gauge-marker::after{
+    content:attr(data-val);
+    position:absolute; top:-20px; left:50%; transform:translateX(-50%);
+    font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--text);
+  }
+
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;}
+  .stat-label{font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px;}
+  .stat-val{font-size:15px; font-weight:500;}
+  .stat-val.pos{color:var(--green);}
+  .stat-val.neg{color:var(--red);}
+
+  .catalyst{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--text-dim);
+    margin-bottom:18px;
+    display:flex; gap:8px; align-items:center;
+  }
+  .catalyst .dot{width:6px; height:6px; background:var(--copper); border-radius:50%; flex-shrink:0;}
+
+  .debate{
+    background:rgba(201,124,61,0.06);
+    border-left:2px solid var(--copper);
+    padding:12px 14px;
+    font-size:13px;
+    line-height:1.55;
+    color:var(--text);
+  }
+  .debate .lbl{font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--copper); text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:6px;}
+
+  .comps{margin-top:16px; font-size:12px; color:var(--text-dim);}
+  .comps span{color:var(--text);}
+
+  .empty-card{
+    border:1px dashed var(--panel-border);
+    background:transparent;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:280px;
+    text-align:center;
+    padding:24px;
+  }
+  .empty-card::before, .empty-card::after{display:none;}
+  .plus{font-family:'Barlow Condensed', sans-serif; font-size:36px; color:var(--panel-border); margin-bottom:10px;}
+  .empty-card p{color:var(--text-dim); font-size:13px; max-width:220px; line-height:1.5;}
+
+  [hidden]{display:none !important;}
+
+  footer{margin-top:48px; padding-top:20px; border-top:1px solid var(--panel-border); font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">AI Infrastructure — Bottleneck Plays</div>
+    <h1>Watchlist</h1>
+    <p class="sub">Companies positioned at physical or structural chokepoints in AI infrastructure — chosen to benefit regardless of which model provider wins.</p>
+  </header>
+
+  <div class="filters">
+    <div class="chip active">All</div>
+    <div class="chip">Cybersecurity</div>
+    <div class="chip">Semiconductors</div>
+    <div class="chip">Power / Energy</div>
+    <div class="chip">Networking</div>
+    <div class="chip">Uranium</div>
+  </div>
+
+  <div class="grid">
+
+    <!-- CROWDSTRIKE -->
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="ticker">CRWD</div>
+          <div class="name">CrowdStrike</div>
+        </div>
+        <div class="sector-tag">Cybersecurity</div>
+      </div>
+      <p class="thesis">AI-native endpoint security — the moat play on identity and cloud security consolidation.</p>
+
+      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
+      <div class="gauge-track"><div class="gauge-marker" style="left:62%;" data-val="Med-High"></div></div>
+
+      <div class="stats">
+        <div><div class="stat-label">Revenue (Q1 FY27)</div><div class="stat-val pos">$1.39B · +26% YoY</div></div>
+        <div><div class="stat-label">ARR</div><div class="stat-val pos">$5.51B · +24% YoY</div></div>
+        <div><div class="stat-label">Net Income</div><div class="stat-val pos">$27.8M (GAAP+)</div></div>
+        <div><div class="stat-label">6mo Stock</div><div class="stat-val pos">+106.4%</div></div>
+      </div>
+
+      <div class="catalyst"><span class="dot"></span> Next earnings ~ Sept 2, 2026</div>
+
+      <div class="debate">
+        <span class="lbl">The Debate</span>
+        Durable AI-native security compounder, or a momentum stock that's run ahead of fundamentals given the rich valuation?
+      </div>
+
+      <div class="comps">Comparables: <span>Palo Alto</span>, <span>Zscaler</span>, <span>Cloudflare</span></div>
+    </div>
+
+    <!-- AMD -->
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="ticker">AMD</div>
+          <div class="name">AMD</div>
+        </div>
+        <div class="sector-tag">Semiconductors</div>
+      </div>
+      <p class="thesis">Data-center AI accelerator challenger to Nvidia — the Helios ramp is the swing factor.</p>
+
+      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
+      <div class="gauge-track"><div class="gauge-marker" style="left:78%;" data-val="High"></div></div>
+
+      <div class="stats">
+        <div><div class="stat-label">Revenue (Q2 2026)</div><div class="stat-val pos">$11.5B · +52% YoY</div></div>
+        <div><div class="stat-label">Data Center Seg.</div><div class="stat-val pos">$6.7B · +107% YoY</div></div>
+        <div><div class="stat-label">Gross Margin</div><div class="stat-val neg">54% (vs 56% est.)</div></div>
+        <div><div class="stat-label">Post-Earnings</div><div class="stat-val neg">-8 to -9%</div></div>
+      </div>
+
+      <div class="catalyst"><span class="dot"></span> Q3 guide ~$13B (+41% YoY) · Helios Q4 ramp</div>
+
+      <div class="debate">
+        <span class="lbl">The Debate</span>
+        Is the margin-driven selloff a rational discount for AI infrastructure buildout costs, or an overreaction to one quarter's cost drag on an accelerating growth story?
+      </div>
+
+      <div class="comps">Comparables: <span>Nvidia</span>, <span>Intel</span>, <span>Broadcom</span></div>
+    </div>
+
+    <!-- VISTRA -->
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="ticker">VST</div>
+          <div class="name">Vistra</div>
+        </div>
+        <div class="sector-tag">Power / Energy</div>
+      </div>
+      <p class="thesis">Largest competitive power generator in the U.S. — a gas and nuclear fleet positioning to power AI data-center demand.</p>
+
+      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
+      <div class="gauge-track"><div class="gauge-marker" style="left:70%;" data-val="High"></div></div>
+
+      <div class="stats">
+        <div><div class="stat-label">Revenue (Q2 2026)</div><div class="stat-val neg">$4.02B · -5.5% YoY</div></div>
+        <div><div class="stat-label">Adj. EBITDA (Ongoing Ops)</div><div class="stat-val pos">$1.77B · +31% YoY</div></div>
+        <div><div class="stat-label">Net Income</div><div class="stat-val neg">$305M · -6.7% YoY</div></div>
+        <div><div class="stat-label">Post-Earnings</div><div class="stat-val neg">-0.6%</div></div>
+      </div>
+
+      <div class="catalyst"><span class="dot"></span> Next earnings ~ Nov 5, 2026 · 52w $132.66–$219.82</div>
+
+      <div class="debate">
+        <span class="lbl">The Debate</span>
+        Direct beneficiary of AI power demand (the $1B Helix partnership with KKR and Nvidia), or is the stock pricing in a nuclear revival faster than approvals can realistically move?
+      </div>
+
+      <div class="comps">Comparables: <span>Constellation Energy</span>, <span>Duke Energy</span>, <span>Alliant Energy</span></div>
+    </div>
+
+    <!-- EMPTY SLOT -->
+    <div class="card empty-card">
+      <div class="plus">+</div>
+      <p>Run a company through your research workflow, then add it here.</p>
+    </div>
+
+  </div>
+
+  <footer>LAST UPDATED — MANUAL · STATIC BUILD · V1</footer>
+
+</div>
+<script>
+  const chips = document.querySelectorAll('.filters .chip');
+  const cards = document.querySelectorAll('.grid .card:not(.empty-card)');
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const sector = chip.textContent.trim();
+      chips.forEach(c => c.classList.toggle('active', c === chip));
+      cards.forEach(card => {
+        const tag = card.querySelector('.sector-tag').textContent.trim();
+        card.hidden = sector !== 'All' && tag !== sector;
+      });
+    });
+  });
+</script>
+</body>
+</html>
