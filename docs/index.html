@@ -92,7 +92,7 @@
     letter-spacing:0.05em;
   }
 
-  .price{display:flex; align-items:baseline; gap:10px; margin-bottom:14px; font-family:'IBM Plex Mono', monospace;}
+  .price{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin-bottom:14px; font-family:'IBM Plex Mono', monospace;}
   .price-val{font-size:22px; font-weight:500; color:var(--text);}
   .price-chg{font-size:12px;}
   .price-chg.pos{color:var(--green);}
@@ -344,7 +344,7 @@
     };
   }
 
-  function formatAsOf(ts) {
+  function formatFetched(ts) {
     const d = new Date(ts);
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     if (d.toDateString() === new Date().toDateString()) return time;
@@ -352,9 +352,17 @@
   }
 
   // Alpha Vantage gives 'YYYY-MM-DD'; build a local date so it isn't shifted by the UTC offset.
-  function formatTradingDay(day) {
+  // A past trading day is that day's close; today's may still be moving during market hours.
+  function formatPriceFrom(day) {
     const [y, m, d] = day.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const traded = new Date(y, m - 1, d);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const daysAgo = Math.round((today - traded) / 86400000);
+    if (daysAgo <= 0) return 'today';
+    const label = daysAgo < 7
+      ? traded.toLocaleDateString([], { weekday: 'short' })
+      : traded.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return label + ' close';
   }
 
   function renderPrice(el, quote, stale) {
@@ -363,7 +371,7 @@
     el.innerHTML = `
       <span class="price-val">$${quote.price.toFixed(2)}</span>
       <span class="price-chg ${quote.change >= 0 ? 'pos' : 'neg'}">${sign}${quote.change.toFixed(2)} (${sign}${quote.changePct.toFixed(2)}%)</span>
-      <span class="price-meta">${stale ? 'Cached · ' : ''}${formatTradingDay(quote.day)} · as of ${formatAsOf(quote.fetchedAt)}</span>`;
+      <span class="price-meta">${stale ? 'Cached · ' : ''}Fetched ${formatFetched(quote.fetchedAt)} · Price from ${formatPriceFrom(quote.day)}</span>`;
   }
 
   function renderUnavailable(el) {
