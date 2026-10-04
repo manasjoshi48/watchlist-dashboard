@@ -92,6 +92,14 @@
     letter-spacing:0.05em;
   }
 
+  .price{display:flex; align-items:baseline; gap:10px; margin-bottom:14px; font-family:'IBM Plex Mono', monospace;}
+  .price-val{font-size:22px; font-weight:500; color:var(--text);}
+  .price-chg{font-size:12px;}
+  .price-chg.pos{color:var(--green);}
+  .price-chg.neg{color:var(--red);}
+  .price-meta{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em; margin-left:auto;}
+  .price.unavailable .price-val{font-size:12px; color:var(--text-dim);}
+
   .thesis{font-size:14px; color:var(--text-dim); font-style:italic; line-height:1.5; margin-bottom:20px; padding-left:12px; border-left:2px solid var(--panel-border);}
 
   .gauge-label{
@@ -301,6 +309,101 @@
       });
     });
   });
+
+  // Live prices (Alpha Vantage GLOBAL_QUOTE). The free tier allows ~25 requests/day,
+  // so quotes are cached per browser for 15 minutes and requests are spaced out.
+  // If a request fails, a saved quote up to 24 hours old is shown, labeled Cached;
+  // otherwise the card keeps its static data and shows a muted notice.
+  const AV_KEY = 'PQMGA1BQS7TWNWW9PQMGA1BQS7TWNWW9';
+  const CACHE_MS = 15 * 60 * 1000;
+  const MAX_FALLBACK_MS = 24 * 60 * 60 * 1000;
+  const SPACING_MS = 1200;
+
+  function readCache(symbol) {
+    try { return JSON.parse(localStorage.getItem('quote:' + symbol)); } catch { return null; }
+  }
+  function writeCache(symbol, quote) {
+    try { localStorage.setItem('quote:' + symbol, JSON.stringify(quote)); } catch {}
+  }
+
+  async function fetchQuote(symbol) {
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${AV_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // Rate limits and bad requests come back as 200 with a Note/Information/Error Message field.
+    const q = data['Global Quote'];
+    const price = q && parseFloat(q['05. price']);
+    if (!price) throw new Error(data.Note || data.Information || data['Error Message'] || 'No quote');
+    return {
+      price,
+      change: parseFloat(q['09. change']),
+      changePct: parseFloat(q['10. change percent']),
+      day: q['07. latest trading day'],
+      fetchedAt: Date.now(),
+    };
+  }
+
+  function formatAsOf(ts) {
+    const d = new Date(ts);
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return time;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + time;
+  }
+
+  // Alpha Vantage gives 'YYYY-MM-DD'; build a local date so it isn't shifted by the UTC offset.
+  function formatTradingDay(day) {
+    const [y, m, d] = day.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  function renderPrice(el, quote, stale) {
+    const sign = quote.change >= 0 ? '+' : '';
+    el.className = 'price';
+    el.innerHTML = `
+      <span class="price-val">$${quote.price.toFixed(2)}</span>
+      <span class="price-chg ${quote.change >= 0 ? 'pos' : 'neg'}">${sign}${quote.change.toFixed(2)} (${sign}${quote.changePct.toFixed(2)}%)</span>
+      <span class="price-meta">${stale ? 'Cached · ' : ''}${formatTradingDay(quote.day)} · as of ${formatAsOf(quote.fetchedAt)}</span>`;
+  }
+
+  function renderUnavailable(el) {
+    el.className = 'price unavailable';
+    el.innerHTML = '<span class="price-val">Live price unavailable — showing static data</span>';
+  }
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function loadPrices() {
+    const slots = [...cards].map(card => {
+      const el = document.createElement('div');
+      el.className = 'price unavailable';
+      el.innerHTML = '<span class="price-val">Loading price…</span>';
+      card.querySelector('.card-top').after(el);
+      return { symbol: card.querySelector('.ticker').textContent.trim(), el };
+    });
+
+    let first = true;
+    for (const { symbol, el } of slots) {
+      const cached = readCache(symbol);
+      if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
+        renderPrice(el, cached, false);
+        continue;
+      }
+      try {
+        if (!first) await sleep(SPACING_MS);
+        first = false;
+        const quote = await fetchQuote(symbol);
+        writeCache(symbol, quote);
+        renderPrice(el, quote, false);
+      } catch (err) {
+        console.warn(`Price fetch failed for ${symbol}:`, err.message);
+        if (cached && Date.now() - cached.fetchedAt < MAX_FALLBACK_MS) renderPrice(el, cached, true);
+        else renderUnavailable(el);
+      }
+    }
+  }
+
+  loadPrices();
 </script>
 </body>
 </html>
