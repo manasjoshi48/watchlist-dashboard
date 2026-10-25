@@ -1,0 +1,2 @@
+# Copy to .dev.vars (gitignored) and put your real key there for `wrangler dev`.
+FINNHUB_KEY=your-key-here

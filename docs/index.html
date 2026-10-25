@@ -310,11 +310,12 @@
     });
   });
 
-  // Live prices (Alpha Vantage GLOBAL_QUOTE). The free tier allows ~25 requests/day,
-  // so quotes are cached per browser for 15 minutes and requests are spaced out.
+  // Live prices come from the watchlist-quotes Worker, which keeps the provider key
+  // server-side and caches each symbol for 5 minutes. Quotes are also cached per browser
+  // for 15 minutes and requests are spaced out.
   // If a request fails, a saved quote up to 24 hours old is shown, labeled Cached;
   // otherwise the card keeps its static data and shows a muted notice.
-  const AV_KEY = 'PQMGA1BQS7TWNWW9PQMGA1BQS7TWNWW9';
+  const QUOTE_URL = 'https://watchlist-quotes.dashboardtesting.workers.dev/quote';
   const CACHE_MS = 15 * 60 * 1000;
   const MAX_FALLBACK_MS = 24 * 60 * 60 * 1000;
   const SPACING_MS = 1200;
@@ -327,21 +328,16 @@
   }
 
   async function fetchQuote(symbol) {
-    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${AV_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    // Rate limits and bad requests come back as 200 with a Note/Information/Error Message field.
-    const q = data['Global Quote'];
-    const price = q && parseFloat(q['05. price']);
-    if (!price) throw new Error(data.Note || data.Information || data['Error Message'] || 'No quote');
-    return {
-      price,
-      change: parseFloat(q['09. change']),
-      changePct: parseFloat(q['10. change percent']),
-      day: q['07. latest trading day'],
-      fetchedAt: Date.now(),
-    };
+    const res = await fetch(`${QUOTE_URL}?symbol=${encodeURIComponent(symbol)}`);
+    const data = await res.json().catch(() => ({}));
+    // Errors come back as a non-2xx status with { error }.
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    const { price, change, changePct, day, fetchedAt } = data;
+    if (!(price > 0) || !Number.isFinite(change) || !Number.isFinite(changePct) || !day || !fetchedAt) {
+      throw new Error('No quote');
+    }
+    // fetchedAt is when the Worker got the price, so a Worker-cached quote shows its real age.
+    return { price, change, changePct, day, fetchedAt };
   }
 
   function formatFetched(ts) {
@@ -351,7 +347,7 @@
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + time;
   }
 
-  // Alpha Vantage gives 'YYYY-MM-DD'; build a local date so it isn't shifted by the UTC offset.
+  // The Worker gives 'YYYY-MM-DD' (New York date); build a local date so it isn't shifted by the UTC offset.
   // A past trading day is that day's close; today's may still be moving during market hours.
   function formatPriceFrom(day) {
     const [y, m, d] = day.split('-').map(Number);
