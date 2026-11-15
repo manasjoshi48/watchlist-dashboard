@@ -1,0 +1,50 @@
+[
+  {
+    "ticker": "CRWD",
+    "name": "CrowdStrike",
+    "sector": "Cybersecurity",
+    "thesis": "AI-native endpoint security — the moat play on identity and cloud security consolidation.",
+    "chokepoint": { "label": "Med-High", "position": 62 },
+    "stats": [
+      { "label": "Revenue (Q1 FY27)", "value": "$1.39B · +26% YoY", "tone": "pos" },
+      { "label": "ARR", "value": "$5.51B · +24% YoY", "tone": "pos" },
+      { "label": "Net Income", "value": "$27.8M (GAAP+)", "tone": "pos" },
+      { "label": "6mo Stock", "value": "+106.4%", "tone": "pos" }
+    ],
+    "catalyst": "Next earnings ~ Sept 2, 2026",
+    "debate": "Durable AI-native security compounder, or a momentum stock that's run ahead of fundamentals given the rich valuation?",
+    "comparables": ["Palo Alto", "Zscaler", "Cloudflare"]
+  },
+  {
+    "ticker": "AMD",
+    "name": "AMD",
+    "sector": "Semiconductors",
+    "thesis": "Data-center AI accelerator challenger to Nvidia — the Helios ramp is the swing factor.",
+    "chokepoint": { "label": "High", "position": 78 },
+    "stats": [
+      { "label": "Revenue (Q2 2026)", "value": "$11.5B · +52% YoY", "tone": "pos" },
+      { "label": "Data Center Seg.", "value": "$6.7B · +107% YoY", "tone": "pos" },
+      { "label": "Gross Margin", "value": "54% (vs 56% est.)", "tone": "neg" },
+      { "label": "Post-Earnings", "value": "-8 to -9%", "tone": "neg" }
+    ],
+    "catalyst": "Q3 guide ~$13B (+41% YoY) · Helios Q4 ramp",
+    "debate": "Is the margin-driven selloff a rational discount for AI infrastructure buildout costs, or an overreaction to one quarter's cost drag on an accelerating growth story?",
+    "comparables": ["Nvidia", "Intel", "Broadcom"]
+  },
+  {
+    "ticker": "VST",
+    "name": "Vistra",
+    "sector": "Power / Energy",
+    "thesis": "Largest competitive power generator in the U.S. — a gas and nuclear fleet positioning to power AI data-center demand.",
+    "chokepoint": { "label": "High", "position": 70 },
+    "stats": [
+      { "label": "Revenue (Q2 2026)", "value": "$4.02B · -5.5% YoY", "tone": "neg" },
+      { "label": "Adj. EBITDA (Ongoing Ops)", "value": "$1.77B · +31% YoY", "tone": "pos" },
+      { "label": "Net Income", "value": "$305M · -6.7% YoY", "tone": "neg" },
+      { "label": "Post-Earnings", "value": "-0.6%", "tone": "neg" }
+    ],
+    "catalyst": "Next earnings ~ Nov 5, 2026 · 52w $132.66–$219.82",
+    "debate": "Direct beneficiary of AI power demand (the $1B Helix partnership with KKR and Nvidia), or is the stock pricing in a nuclear revival faster than approvals can realistically move?",
+    "comparables": ["Constellation Energy", "Duke Energy", "Alliant Energy"]
+  }
+]

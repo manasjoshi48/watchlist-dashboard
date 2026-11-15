@@ -191,99 +191,6 @@
 
   <div class="grid">
 
-    <!-- CROWDSTRIKE -->
-    <div class="card">
-      <div class="card-top">
-        <div>
-          <div class="ticker">CRWD</div>
-          <div class="name">CrowdStrike</div>
-        </div>
-        <div class="sector-tag">Cybersecurity</div>
-      </div>
-      <p class="thesis">AI-native endpoint security — the moat play on identity and cloud security consolidation.</p>
-
-      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
-      <div class="gauge-track"><div class="gauge-marker" style="left:62%;" data-val="Med-High"></div></div>
-
-      <div class="stats">
-        <div><div class="stat-label">Revenue (Q1 FY27)</div><div class="stat-val pos">$1.39B · +26% YoY</div></div>
-        <div><div class="stat-label">ARR</div><div class="stat-val pos">$5.51B · +24% YoY</div></div>
-        <div><div class="stat-label">Net Income</div><div class="stat-val pos">$27.8M (GAAP+)</div></div>
-        <div><div class="stat-label">6mo Stock</div><div class="stat-val pos">+106.4%</div></div>
-      </div>
-
-      <div class="catalyst"><span class="dot"></span> Next earnings ~ Sept 2, 2026</div>
-
-      <div class="debate">
-        <span class="lbl">The Debate</span>
-        Durable AI-native security compounder, or a momentum stock that's run ahead of fundamentals given the rich valuation?
-      </div>
-
-      <div class="comps">Comparables: <span>Palo Alto</span>, <span>Zscaler</span>, <span>Cloudflare</span></div>
-    </div>
-
-    <!-- AMD -->
-    <div class="card">
-      <div class="card-top">
-        <div>
-          <div class="ticker">AMD</div>
-          <div class="name">AMD</div>
-        </div>
-        <div class="sector-tag">Semiconductors</div>
-      </div>
-      <p class="thesis">Data-center AI accelerator challenger to Nvidia — the Helios ramp is the swing factor.</p>
-
-      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
-      <div class="gauge-track"><div class="gauge-marker" style="left:78%;" data-val="High"></div></div>
-
-      <div class="stats">
-        <div><div class="stat-label">Revenue (Q2 2026)</div><div class="stat-val pos">$11.5B · +52% YoY</div></div>
-        <div><div class="stat-label">Data Center Seg.</div><div class="stat-val pos">$6.7B · +107% YoY</div></div>
-        <div><div class="stat-label">Gross Margin</div><div class="stat-val neg">54% (vs 56% est.)</div></div>
-        <div><div class="stat-label">Post-Earnings</div><div class="stat-val neg">-8 to -9%</div></div>
-      </div>
-
-      <div class="catalyst"><span class="dot"></span> Q3 guide ~$13B (+41% YoY) · Helios Q4 ramp</div>
-
-      <div class="debate">
-        <span class="lbl">The Debate</span>
-        Is the margin-driven selloff a rational discount for AI infrastructure buildout costs, or an overreaction to one quarter's cost drag on an accelerating growth story?
-      </div>
-
-      <div class="comps">Comparables: <span>Nvidia</span>, <span>Intel</span>, <span>Broadcom</span></div>
-    </div>
-
-    <!-- VISTRA -->
-    <div class="card">
-      <div class="card-top">
-        <div>
-          <div class="ticker">VST</div>
-          <div class="name">Vistra</div>
-        </div>
-        <div class="sector-tag">Power / Energy</div>
-      </div>
-      <p class="thesis">Largest competitive power generator in the U.S. — a gas and nuclear fleet positioning to power AI data-center demand.</p>
-
-      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
-      <div class="gauge-track"><div class="gauge-marker" style="left:70%;" data-val="High"></div></div>
-
-      <div class="stats">
-        <div><div class="stat-label">Revenue (Q2 2026)</div><div class="stat-val neg">$4.02B · -5.5% YoY</div></div>
-        <div><div class="stat-label">Adj. EBITDA (Ongoing Ops)</div><div class="stat-val pos">$1.77B · +31% YoY</div></div>
-        <div><div class="stat-label">Net Income</div><div class="stat-val neg">$305M · -6.7% YoY</div></div>
-        <div><div class="stat-label">Post-Earnings</div><div class="stat-val neg">-0.6%</div></div>
-      </div>
-
-      <div class="catalyst"><span class="dot"></span> Next earnings ~ Nov 5, 2026 · 52w $132.66–$219.82</div>
-
-      <div class="debate">
-        <span class="lbl">The Debate</span>
-        Direct beneficiary of AI power demand (the $1B Helix partnership with KKR and Nvidia), or is the stock pricing in a nuclear revival faster than approvals can realistically move?
-      </div>
-
-      <div class="comps">Comparables: <span>Constellation Energy</span>, <span>Duke Energy</span>, <span>Alliant Energy</span></div>
-    </div>
-
     <!-- EMPTY SLOT -->
     <div class="card empty-card">
       <div class="plus">+</div>
@@ -292,23 +199,119 @@
 
   </div>
 
+  <!-- One card per entry in data/companies.json; filled in by renderCard(). -->
+  <template id="card-template">
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="ticker"></div>
+          <div class="name"></div>
+        </div>
+        <div class="sector-tag"></div>
+      </div>
+      <p class="thesis"></p>
+
+      <div class="gauge-label"><span>Chokepoint Intensity</span><span>Low — Critical</span></div>
+      <div class="gauge-track"><div class="gauge-marker"></div></div>
+
+      <div class="stats"></div>
+
+      <div class="catalyst"><span class="dot"></span><span class="catalyst-text"></span></div>
+
+      <div class="debate">
+        <span class="lbl">The Debate</span>
+        <span class="debate-text"></span>
+      </div>
+
+      <div class="comps">Comparables: </div>
+    </div>
+  </template>
+
   <footer>LAST UPDATED — MANUAL · STATIC BUILD · V1</footer>
 
 </div>
 <script>
-  const chips = document.querySelectorAll('.filters .chip');
-  const cards = document.querySelectorAll('.grid .card:not(.empty-card)');
+  // Company facts live in data/companies.json; each entry becomes one card built from #card-template.
+  const DATA_URL = 'data/companies.json';
+  const grid = document.querySelector('.grid');
+  const emptyCard = grid.querySelector('.empty-card');
+  const template = document.getElementById('card-template');
 
-  chips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      const sector = chip.textContent.trim();
-      chips.forEach(c => c.classList.toggle('active', c === chip));
-      cards.forEach(card => {
-        const tag = card.querySelector('.sector-tag').textContent.trim();
-        card.hidden = sector !== 'All' && tag !== sector;
+  function span(className, text) {
+    const el = document.createElement('span');
+    if (className) el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
+  function renderCard(c) {
+    const card = template.content.firstElementChild.cloneNode(true);
+    const q = sel => card.querySelector(sel);
+    q('.ticker').textContent = c.ticker;
+    q('.name').textContent = c.name;
+    q('.sector-tag').textContent = c.sector;
+    q('.thesis').textContent = c.thesis;
+
+    const marker = q('.gauge-marker');
+    marker.style.left = c.chokepoint.position + '%';
+    marker.dataset.val = c.chokepoint.label;
+
+    for (const stat of c.stats) {
+      const block = document.createElement('div');
+      const label = document.createElement('div');
+      label.className = 'stat-label';
+      label.textContent = stat.label;
+      const value = document.createElement('div');
+      value.className = 'stat-val' + (stat.tone ? ' ' + stat.tone : '');
+      value.textContent = stat.value;
+      block.append(label, value);
+      q('.stats').append(block);
+    }
+
+    q('.catalyst-text').textContent = c.catalyst;
+    q('.debate-text').textContent = c.debate;
+
+    const comps = q('.comps');
+    c.comparables.forEach((name, i) => {
+      if (i > 0) comps.append(', ');
+      comps.append(span('', name));
+    });
+    return card;
+  }
+
+  function setupFilters(cards) {
+    const chips = document.querySelectorAll('.filters .chip');
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const sector = chip.textContent.trim();
+        chips.forEach(c => c.classList.toggle('active', c === chip));
+        cards.forEach(card => {
+          const tag = card.querySelector('.sector-tag').textContent.trim();
+          card.hidden = sector !== 'All' && tag !== sector;
+        });
       });
     });
-  });
+  }
+
+  async function init() {
+    let companies;
+    try {
+      const res = await fetch(DATA_URL);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      companies = await res.json();
+    } catch (err) {
+      console.error('Could not load company data:', err.message);
+      const note = document.createElement('p');
+      note.className = 'sub';
+      note.textContent = 'Company data could not be loaded.';
+      grid.before(note);
+      return;
+    }
+    const cards = companies.map(renderCard);
+    emptyCard.before(...cards);
+    setupFilters(cards);
+    loadPrices(cards);
+  }
 
   // Live prices come from the watchlist-quotes Worker, which keeps the provider key
   // server-side and caches each symbol for 5 minutes. Quotes are also cached per browser
@@ -364,24 +367,25 @@
   function renderPrice(el, quote, stale) {
     const sign = quote.change >= 0 ? '+' : '';
     el.className = 'price';
-    el.innerHTML = `
-      <span class="price-val">$${quote.price.toFixed(2)}</span>
-      <span class="price-chg ${quote.change >= 0 ? 'pos' : 'neg'}">${sign}${quote.change.toFixed(2)} (${sign}${quote.changePct.toFixed(2)}%)</span>
-      <span class="price-meta">${stale ? 'Cached · ' : ''}Fetched ${formatFetched(quote.fetchedAt)} · Price from ${formatPriceFrom(quote.day)}</span>`;
+    el.replaceChildren(
+      span('price-val', `$${quote.price.toFixed(2)}`),
+      span(`price-chg ${quote.change >= 0 ? 'pos' : 'neg'}`, `${sign}${quote.change.toFixed(2)} (${sign}${quote.changePct.toFixed(2)}%)`),
+      span('price-meta', `${stale ? 'Cached · ' : ''}Fetched ${formatFetched(quote.fetchedAt)} · Price from ${formatPriceFrom(quote.day)}`)
+    );
   }
 
   function renderUnavailable(el) {
     el.className = 'price unavailable';
-    el.innerHTML = '<span class="price-val">Live price unavailable — showing static data</span>';
+    el.replaceChildren(span('price-val', 'Live price unavailable — showing static data'));
   }
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  async function loadPrices() {
-    const slots = [...cards].map(card => {
+  async function loadPrices(cards) {
+    const slots = cards.map(card => {
       const el = document.createElement('div');
       el.className = 'price unavailable';
-      el.innerHTML = '<span class="price-val">Loading price…</span>';
+      el.replaceChildren(span('price-val', 'Loading price…'));
       card.querySelector('.card-top').after(el);
       return { symbol: card.querySelector('.ticker').textContent.trim(), el };
     });
@@ -407,7 +411,7 @@
     }
   }
 
-  loadPrices();
+  init();
 </script>
 </body>
 </html>
