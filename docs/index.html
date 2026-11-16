@@ -232,6 +232,27 @@
   .plus{font-family:'Barlow Condensed', sans-serif; font-size:36px; color:var(--panel-border); margin-bottom:10px;}
   .empty-card p{color:var(--text-dim); font-size:13px; max-width:220px; line-height:1.5;}
 
+  /* Price history chart (scorecard only) */
+  .history{margin:4px 0 24px;}
+  .history-head{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;}
+  .history-title{font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em;}
+  .range-group{display:flex; border:1px solid var(--panel-border); border-radius:2px;}
+  .range-btn{
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    padding:5px 12px; background:transparent; border:0; color:var(--text-dim); cursor:pointer;
+  }
+  .range-btn + .range-btn{border-left:1px solid var(--panel-border);}
+  .range-btn[aria-pressed="true"]{color:var(--copper); background:rgba(201,124,61,0.08);}
+  .range-btn:hover{color:var(--text);}
+  .range-btn:disabled{cursor:default; opacity:0.5;}
+  .chart-box{position:relative; height:240px;}
+  .chart-status{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--text-dim);
+    border:1px dashed var(--panel-border); padding:16px;
+  }
+  .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+
   [hidden]{display:none !important;}
 
   footer{margin-top:48px; padding-top:20px; border-top:1px solid var(--panel-border); font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim);}
@@ -601,6 +622,7 @@
 
   function showWatchlist() {
     scorecard = null;
+    destroyHistoryChart();
     document.title = 'Bottleneck Watchlist';
     if (!watchlistView.hidden) return;
     companyView.hidden = true;
@@ -636,6 +658,7 @@
     watchlistView.hidden = true;
     companyView.hidden = false;
     scorecard = null;
+    destroyHistoryChart();
 
     let content;
     const c = companies && companies.find(x => x.ticker.toUpperCase() === ticker.toUpperCase());
@@ -652,8 +675,11 @@
     } else {
       const { card, priceEl } = renderCard(c, { scorecard: true });
       card.classList.add('scorecard');
+      const historyEl = buildHistorySection(c);
+      priceEl.after(historyEl);
       content = card;
       scorecard = { ticker: c.ticker, priceEl };
+      openHistory(c.ticker, historyEl);
       lastOpened = c.ticker;
       document.title = `${c.ticker} · ${c.name} · Bottleneck Watchlist`;
     }
@@ -805,6 +831,262 @@
         else setPrice(symbol, { status: 'unavailable' });
       }
     }
+  }
+
+  // ---------- Price history chart (scorecard only) ----------
+  // Daily closes come from the Worker's /history route (about a year, oldest first).
+  // Nothing is fetched until a scorecard opens; the result is kept in localStorage for
+  // 12 hours. Chart.js is a local, pinned copy in vendor/ and is also only loaded then,
+  // so a failure in either leaves the rest of the scorecard untouched.
+  const HISTORY_URL = 'https://watchlist-quotes.dashboardtesting.workers.dev/history';
+  const HISTORY_CACHE_MS = 12 * 60 * 60 * 1000;
+  const CHART_JS_SRC = 'vendor/chart-4.4.1.umd.js';
+  const RANGES = [
+    { key: '1M', months: 1, label: '1 month' },
+    { key: '3M', months: 3, label: '3 months' },
+    { key: '6M', months: 6, label: '6 months' },
+    { key: '1Y', months: 12, label: '1 year' },
+  ];
+  const DEFAULT_RANGE = '6M';
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+  let historyView = null;              // { ticker, name, el, chart, points, range } for the open scorecard
+  const historyRequests = new Map();   // symbol -> in-flight promise, so re-renders don't double-fetch
+  let chartJsPromise = null;
+
+  const usd = n => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // 'YYYY-MM-DD' -> local Date, so the day isn't shifted by the UTC offset.
+  function localDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const longDate = iso => localDate(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+
+  function cleanPoints(points) {
+    if (!Array.isArray(points)) return [];
+    return points.filter(p => p && typeof p.date === 'string' && ISO_DATE.test(p.date) && Number.isFinite(p.close) && p.close > 0);
+  }
+
+  function readHistoryCache(symbol) {
+    try {
+      const c = JSON.parse(localStorage.getItem('history:' + symbol));
+      if (c && Date.now() - c.savedAt < HISTORY_CACHE_MS) {
+        const points = cleanPoints(c.points);
+        if (points.length) return points;
+      }
+    } catch {}
+    return null;
+  }
+  function writeHistoryCache(symbol, points) {
+    try { localStorage.setItem('history:' + symbol, JSON.stringify({ savedAt: Date.now(), points })); } catch {}
+  }
+
+  function getHistory(symbol) {
+    const cached = readHistoryCache(symbol);
+    if (cached) return Promise.resolve(cached);
+    if (historyRequests.has(symbol)) return historyRequests.get(symbol);
+    const req = (async () => {
+      const res = await fetch(`${HISTORY_URL}?symbol=${encodeURIComponent(symbol)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      const points = cleanPoints(data.points);
+      if (!points.length) throw new Error('No history points');
+      writeHistoryCache(symbol, points);
+      return points;
+    })().finally(() => historyRequests.delete(symbol));
+    historyRequests.set(symbol, req);
+    return req;
+  }
+
+  function loadChartJs() {
+    if (window.Chart) return Promise.resolve(window.Chart);
+    if (!chartJsPromise) {
+      chartJsPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = CHART_JS_SRC;
+        s.onload = () => window.Chart ? resolve(window.Chart) : reject(new Error('Chart.js missing'));
+        s.onerror = () => { s.remove(); reject(new Error('Could not load Chart.js')); };
+        document.head.append(s);
+      }).catch(err => { chartJsPromise = null; throw err; }); // allow a retry on the next scorecard
+    }
+    return chartJsPromise;
+  }
+
+  function buildHistorySection(c) {
+    const section = document.createElement('section');
+    section.className = 'history';
+    section.setAttribute('aria-label', `${c.name} price history`);
+
+    const head = document.createElement('div');
+    head.className = 'history-head';
+    const group = document.createElement('div');
+    group.className = 'range-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Chart range');
+    for (const r of RANGES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'range-btn';
+      b.dataset.range = r.key;
+      b.textContent = r.key;
+      b.setAttribute('aria-label', r.label);
+      b.setAttribute('aria-pressed', String(r.key === DEFAULT_RANGE));
+      b.disabled = true; // enabled once data is in
+      b.addEventListener('click', () => setHistoryRange(r.key));
+      group.append(b);
+    }
+    head.append(span('history-title', 'Price history · daily close'), group);
+
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true'); // the text summary below describes it
+    const status = document.createElement('div');
+    status.className = 'chart-status';
+    status.setAttribute('role', 'status');
+    box.append(canvas, status);
+
+    const summary = document.createElement('p');
+    summary.className = 'sr-only history-summary';
+    summary.setAttribute('aria-live', 'polite');
+
+    section.append(head, box, summary);
+    return section;
+  }
+
+  async function openHistory(ticker, el) {
+    const c = companies.find(x => x.ticker === ticker);
+    const view = { ticker, name: c ? c.name : ticker, el, chart: null, points: null, range: DEFAULT_RANGE };
+    historyView = view;
+    const status = el.querySelector('.chart-status');
+    status.textContent = 'Loading price history…';
+
+    let points;
+    try {
+      [points] = await Promise.all([getHistory(ticker), loadChartJs()]);
+    } catch (err) {
+      console.warn(`Price history failed for ${ticker}:`, err.message);
+      if (historyView !== view) return;
+      status.textContent = 'Price history isn’t available right now. Please try again later.';
+      el.querySelector('.range-group').hidden = true;
+      return;
+    }
+    if (historyView !== view) return; // user navigated away while loading
+
+    view.points = points;
+    status.hidden = true;
+    el.querySelectorAll('.range-btn').forEach(b => { b.disabled = false; });
+    try {
+      view.chart = createHistoryChart(el.querySelector('canvas'), view);
+      setHistoryRange(view.range);
+    } catch (err) {
+      console.error('Could not draw price history:', err);
+      status.hidden = false;
+      status.textContent = 'Price history isn’t available right now. Please try again later.';
+      el.querySelector('.range-group').hidden = true;
+    }
+  }
+
+  function pointsInRange(points, rangeKey) {
+    const r = RANGES.find(x => x.key === rangeKey);
+    const last = localDate(points[points.length - 1].date);
+    const cutoff = new Date(last.getFullYear(), last.getMonth() - r.months, last.getDate());
+    const pad = n => String(n).padStart(2, '0');
+    const cutoffIso = `${cutoff.getFullYear()}-${pad(cutoff.getMonth() + 1)}-${pad(cutoff.getDate())}`;
+    const inRange = points.filter(p => p.date >= cutoffIso);
+    return inRange.length >= 2 ? inRange : points.slice(-2);
+  }
+
+  function createHistoryChart(canvas, view) {
+    const css = getComputedStyle(document.documentElement);
+    const v = name => css.getPropertyValue(name).trim();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mono = { family: "'IBM Plex Mono', monospace", size: 10 };
+    return new Chart(canvas, {
+      type: 'line',
+      data: { labels: [], datasets: [{
+        data: [],
+        borderColor: v('--copper'),
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHitRadius: 8,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: v('--copper'),
+        pointHoverBorderColor: v('--panel'),
+        pointHoverBorderWidth: 2,
+        tension: 0,
+        fill: false,
+      }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: reduceMotion ? false : { duration: 250 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            backgroundColor: v('--bg'),
+            borderColor: v('--panel-border'),
+            borderWidth: 1,
+            titleColor: v('--text-dim'),
+            bodyColor: v('--text'),
+            titleFont: mono,
+            bodyFont: { ...mono, size: 12 },
+            padding: 8,
+            callbacks: {
+              title: items => longDate(items[0].label),
+              label: item => usd(item.parsed.y),
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { color: v('--panel-border') },
+            ticks: {
+              color: v('--text-dim'), font: mono, maxRotation: 0, autoSkip: true, maxTicksLimit: 6,
+              callback(value) {
+                const d = localDate(this.getLabelForValue(value));
+                return view.range === '1M' || view.range === '3M'
+                  ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                  : d.toLocaleDateString([], { month: 'short', year: '2-digit' });
+              },
+            },
+          },
+          y: {
+            grid: { color: 'rgba(139,147,161,0.12)' },
+            border: { display: false },
+            ticks: { color: v('--text-dim'), font: mono, maxTicksLimit: 5, callback: value => usd(value) },
+          },
+        },
+      },
+    });
+  }
+
+  function setHistoryRange(rangeKey) {
+    const view = historyView;
+    if (!view || !view.chart || !view.points) return;
+    view.range = rangeKey;
+    view.el.querySelectorAll('.range-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.range === rangeKey)));
+
+    const pts = pointsInRange(view.points, rangeKey);
+    view.chart.data.labels = pts.map(p => p.date);
+    view.chart.data.datasets[0].data = pts.map(p => p.close);
+    view.chart.update();
+
+    const first = pts[0], last = pts[pts.length - 1];
+    const pct = (last.close - first.close) / first.close * 100;
+    const sign = pct > 0 ? '+' : '';
+    const label = RANGES.find(r => r.key === rangeKey).label;
+    view.el.querySelector('.history-summary').textContent =
+      `${view.name} closing price over ${label}: ${usd(first.close)} on ${longDate(first.date)} ` +
+      `to ${usd(last.close)} on ${longDate(last.date)}, a change of ${sign}${pct.toFixed(2)}%.`;
+  }
+
+  function destroyHistoryChart() {
+    if (historyView && historyView.chart) historyView.chart.destroy();
+    historyView = null;
   }
 
   init();

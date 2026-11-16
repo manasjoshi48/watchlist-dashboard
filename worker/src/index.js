@@ -1,10 +1,14 @@
-// Quote proxy for the watchlist dashboard.
-// GET /quote?symbol=CRWD -> { price, change, changePct, day, fetchedAt }
-// Keeps the Finnhub key server-side and caches each symbol in KV for 5 minutes;
-// Finnhub's limit is per minute, so a short cache is enough to stay under it.
+// Price proxy for the watchlist dashboard.
+// GET /quote?symbol=CRWD   -> { price, change, changePct, day, fetchedAt }
+// GET /history?symbol=CRWD -> { symbol, points: [{ date, close }], fetchedAt }, oldest first
+// Keeps the Finnhub and Twelve Data keys server-side and caches each symbol in KV.
+// Quotes are cached for 5 minutes (Finnhub's limit is per minute, so a short cache
+// is enough); a year of daily closes only changes once a day, so history is cached
+// for 12 hours to stay well inside Twelve Data's daily credit allowance.
 
 const ALLOWED_SYMBOLS = new Set(['CRWD', 'AMD', 'VST']);
 const CACHE_TTL_SECONDS = 5 * 60;
+const HISTORY_CACHE_TTL_SECONDS = 12 * 60 * 60;
 const UPSTREAM_TIMEOUT_MS = 10_000;
 
 // Origin is checked server-side as well as via CORS. Browsers always send it on
@@ -33,8 +37,8 @@ function json(body, status, headers = {}) {
   });
 }
 
-// Upstream failures are mapped to our own messages; Finnhub's text and the key
-// (sent in a request header) are never sent back to the caller.
+// Upstream failures are mapped to our own messages; the provider's text and the
+// key (sent in a request header) are never sent back to the caller.
 class UpstreamError extends Error {
   constructor(status, publicMessage, detail) {
     super(detail);
@@ -94,14 +98,21 @@ async function fetchFromFinnhub(symbol, apiKey) {
   };
 }
 
-async function handleQuote(url, env, cors) {
+// Returns { symbol } or { error: Response } for a missing or unsupported symbol.
+function parseSymbol(url, cors) {
   const symbol = (url.searchParams.get('symbol') || '').trim().toUpperCase();
   if (!symbol) {
-    return json({ error: 'Missing symbol parameter, e.g. /quote?symbol=AMD' }, 400, cors);
+    return { error: json({ error: `Missing symbol parameter, e.g. ${url.pathname}?symbol=AMD` }, 400, cors) };
   }
   if (!ALLOWED_SYMBOLS.has(symbol)) {
-    return json({ error: `Unsupported symbol "${symbol}". Allowed: ${[...ALLOWED_SYMBOLS].join(', ')}` }, 400, cors);
+    return { error: json({ error: `Unsupported symbol "${symbol}". Allowed: ${[...ALLOWED_SYMBOLS].join(', ')}` }, 400, cors) };
   }
+  return { symbol };
+}
+
+async function handleQuote(url, env, cors) {
+  const { symbol, error } = parseSymbol(url, cors);
+  if (error) return error;
 
   const cacheKey = `quote:${symbol}`;
   const cached = await env.QUOTES.get(cacheKey, 'json');
@@ -129,6 +140,109 @@ async function handleQuote(url, env, cors) {
   }
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// A year ago in New York, as YYYY-MM-DD. With a start_date set, Twelve Data returns
+// every bar in range (outputsize defaults to its maximum), so this is ~252 trading days.
+function oneYearAgo(now = new Date()) {
+  const [y, m, d] = tradingDay.format(now).split('-').map(Number);
+  // Date.UTC rolls Feb 29 over to Mar 1 in a non-leap year, which is fine here.
+  return new Date(Date.UTC(y - 1, m - 1, d)).toISOString().slice(0, 10);
+}
+
+// Twelve Data: https://twelvedata.com/docs/market-data/time-series
+// Success: { meta, values: [{ datetime, open, high, low, close, volume }], status: 'ok' }
+// with every value a string. Errors are { code, message, status: 'error' }, and may
+// arrive with HTTP 200, so the body's status/code is checked as well as res.status.
+async function fetchFromTwelveData(symbol, apiKey) {
+  const params = new URLSearchParams({
+    symbol,
+    interval: '1day',
+    start_date: oneYearAgo(),
+    order: 'asc',
+  });
+  const url = `https://api.twelvedata.com/time_series?${params}`;
+
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'Authorization': `apikey ${apiKey}` },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err.name === 'TimeoutError';
+    throw new UpstreamError(
+      timedOut ? 504 : 502,
+      timedOut ? 'History provider timed out' : 'Could not reach history provider',
+      err.name,
+    );
+  }
+
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    body = undefined;
+  }
+
+  const code = res.ok && body && body.status === 'error' ? Number(body.code) : res.status;
+  if (code === 429) {
+    throw new UpstreamError(429, 'History provider rate limit reached, try again later', 'code 429');
+  }
+  if (!res.ok || (body && body.status === 'error')) {
+    throw new UpstreamError(502, 'History provider returned an error', `code ${code}`);
+  }
+  if (body === undefined) {
+    throw new UpstreamError(502, 'History provider returned an unreadable response', 'invalid JSON');
+  }
+
+  const values = Array.isArray(body?.values) ? body.values : [];
+  const points = [];
+  for (const v of values) {
+    const date = typeof v?.datetime === 'string' ? v.datetime.slice(0, 10) : '';
+    const close = Number(v?.close);
+    if (ISO_DATE.test(date) && Number.isFinite(close) && close > 0) points.push({ date, close });
+  }
+  if (points.length === 0) {
+    throw new UpstreamError(502, 'History provider returned no prices', `no usable values (${values.length} raw)`);
+  }
+  // order=asc is requested, but sort anyway so the oldest-first contract doesn't
+  // depend on the provider honouring it.
+  points.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return { symbol, points, fetchedAt: Date.now() };
+}
+
+async function handleHistory(url, env, cors) {
+  const { symbol, error } = parseSymbol(url, cors);
+  if (error) return error;
+
+  const cacheKey = `history:${symbol}`;
+  const cached = await env.QUOTES.get(cacheKey, 'json');
+  if (cached && Date.now() - cached.fetchedAt < HISTORY_CACHE_TTL_SECONDS * 1000) {
+    return json(cached, 200, { ...cors, 'X-Cache': 'HIT' });
+  }
+
+  if (!env.TWELVE_DATA_KEY) {
+    console.error('TWELVE_DATA_KEY secret is not set');
+    return json({ error: 'Server is not configured' }, 500, { ...cors, 'X-Cache': 'MISS' });
+  }
+
+  try {
+    const history = await fetchFromTwelveData(symbol, env.TWELVE_DATA_KEY);
+    await env.QUOTES.put(cacheKey, JSON.stringify(history), { expirationTtl: HISTORY_CACHE_TTL_SECONDS });
+    return json(history, 200, { ...cors, 'X-Cache': 'MISS' });
+  } catch (err) {
+    if (!(err instanceof UpstreamError)) throw err;
+    const detail = err.message.replaceAll(env.TWELVE_DATA_KEY, '[redacted]');
+    console.error(`Twelve Data failed for ${symbol}: ${detail}`);
+    const headers = { ...cors, 'X-Cache': 'MISS' };
+    if (err.status === 429) headers['Retry-After'] = '60';
+    return json({ error: err.publicMessage }, err.status, headers);
+  }
+}
+
+const ROUTES = { '/quote': handleQuote, '/history': handleHistory };
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin');
@@ -145,12 +259,13 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (url.pathname !== '/quote') {
-      return json({ error: 'Not found. Use GET /quote?symbol=XXX' }, 404, cors);
+    const handler = Object.hasOwn(ROUTES, url.pathname) ? ROUTES[url.pathname] : null;
+    if (!handler) {
+      return json({ error: 'Not found. Use GET /quote?symbol=XXX or /history?symbol=XXX' }, 404, cors);
     }
 
     try {
-      return await handleQuote(url, env, cors);
+      return await handler(url, env, cors);
     } catch (err) {
       console.error('Unexpected error:', err.name);
       return json({ error: 'Internal error' }, 500, cors);

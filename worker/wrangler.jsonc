@@ -8,6 +8,7 @@
   "kv_namespaces": [
     { "binding": "QUOTES", "id": "1a4b18da4dbd472a80c666c142f1361e" }
   ]
-  // FINNHUB_KEY is a secret, not a var: `npx wrangler secret put FINNHUB_KEY`
-  // for production, and worker/.dev.vars (gitignored) for local dev.
+  // FINNHUB_KEY and TWELVE_DATA_KEY are secrets, not vars: `npx wrangler secret put
+  // FINNHUB_KEY` (and TWELVE_DATA_KEY) for production, and worker/.dev.vars
+  // (gitignored) for local dev. Both /quote and /history cache in QUOTES.
 }
